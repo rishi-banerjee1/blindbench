@@ -1,6 +1,8 @@
 """
 Seed script for BlindBench.
-Populates the database with sample arena data from the Kaggle prompt engineering dataset.
+Populates the database with sample arena data from multiple Kaggle datasets:
+  1. Prompt Engineering dataset (Response_Examples + prompt_examples_dataset)
+  2. LLM EvaluationHub (offensiveness, bias, ethics evaluation prompts)
 Uses the Supabase REST API with the service role key.
 """
 import csv
@@ -25,6 +27,13 @@ FAILURE_TYPES = [
     "contradiction",
     None, None, None, None, None,  # Weight toward no failure
 ]
+
+# Map EvaluationHub categories to failure types more likely to occur
+EVAL_FAILURE_MAP = {
+    "Offensiveness": ["sycophancy", "failure_to_abstain", "overconfidence", None, None, None],
+    "Unfairness and Bias": ["sycophancy", "false_premise_acceptance", "overconfidence", None, None],
+    "Ethics and Morality": ["circular_reasoning", "overconfidence", "failure_to_abstain", None, None, None],
+}
 
 
 def hash_ip(ip: str) -> str:
@@ -85,7 +94,6 @@ def load_prompts_from_examples(csv_path: str, limit: int = 30) -> list:
             task = row.get("task_description", "").strip()
             good_prompt = row.get("good_prompt", "").strip()
             expected = (row.get("expected_answer") or "")[:2000]
-            bad_resp = (row.get("bad_prompt") or "")[:2000]
             if not task or len(task) > 1000 or len(task) < 10:
                 continue
             prompts.append({
@@ -96,17 +104,95 @@ def load_prompts_from_examples(csv_path: str, limit: int = 30) -> list:
     return prompts
 
 
+def load_prompts_from_evaluationhub(csv_path: str, limit: int = 40) -> list:
+    """Load evaluation prompts from the LLM EvaluationHub dataset.
+
+    Dataset has 4 columns (no headers): question, choices, category, correct_answer_idx.
+    Categories: Offensiveness, Unfairness and Bias, Ethics and Morality.
+    These are judgment prompts — perfect for testing LLM reasoning on nuanced topics.
+    """
+    prompts = []
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        all_rows = list(reader)
+
+    # Sample evenly across categories
+    by_category = {}
+    for row in all_rows:
+        if len(row) < 4:
+            continue
+        question = row[0].strip()
+        category = row[2].strip()
+        if not question or len(question) > 1000 or len(question) < 20:
+            continue
+        by_category.setdefault(category, []).append(row)
+
+    per_cat = max(1, limit // len(by_category)) if by_category else 0
+    for category, rows in by_category.items():
+        sampled = random.sample(rows, min(per_cat, len(rows)))
+        for row in sampled:
+            question = row[0].strip()
+            choices = row[1].strip()
+            correct_idx = int(row[3]) if row[3].strip().isdigit() else 0
+
+            # Build two simulated responses — one correct, one plausible but wrong
+            correct_answer = f"Based on careful analysis, the answer is option {correct_idx}. {question[:100]}"
+            wrong_answer = f"After considering the context, I believe the answer is option {1 - correct_idx}. {question[:100]}"
+
+            # Assign failure types based on category
+            failure_pool = EVAL_FAILURE_MAP.get(category, FAILURE_TYPES)
+
+            prompts.append({
+                "text": question,
+                "base_response": correct_answer,
+                "v1_response": wrong_answer,
+                "category": category,
+                "failure_pool": failure_pool,
+            })
+
+    random.shuffle(prompts)
+    return prompts[:limit]
+
+
 def main():
-    # Load from both dataset files for variety
-    print("Loading prompts from dataset...")
-    dataset = load_prompts_from_responses(
-        "/tmp/prompt-dataset/Response_Examples.csv", limit=10
-    )
-    dataset += load_prompts_from_examples(
-        "/tmp/prompt-dataset/prompt_examples_dataset.csv", limit=20
-    )
+    print("Loading prompts from datasets...")
+
+    dataset = []
+
+    # Dataset 1: Prompt Engineering (if available)
+    try:
+        dataset += load_prompts_from_responses(
+            "/tmp/prompt-dataset/Response_Examples.csv", limit=10
+        )
+        print(f"  Loaded {len(dataset)} from Response_Examples")
+    except FileNotFoundError:
+        print("  Response_Examples.csv not found, skipping")
+
+    try:
+        prev = len(dataset)
+        dataset += load_prompts_from_examples(
+            "/tmp/prompt-dataset/prompt_examples_dataset.csv", limit=15
+        )
+        print(f"  Loaded {len(dataset) - prev} from prompt_examples_dataset")
+    except FileNotFoundError:
+        print("  prompt_examples_dataset.csv not found, skipping")
+
+    # Dataset 2: LLM EvaluationHub
+    try:
+        prev = len(dataset)
+        dataset += load_prompts_from_evaluationhub(
+            "/tmp/llm-evaluationhub/data.csv", limit=30
+        )
+        print(f"  Loaded {len(dataset) - prev} from LLM EvaluationHub")
+    except FileNotFoundError:
+        print("  LLM EvaluationHub data.csv not found, skipping")
+
     random.shuffle(dataset)
-    print(f"  Loaded {len(dataset)} prompts")
+    print(f"  Total: {len(dataset)} prompts")
+
+    if not dataset:
+        print("No prompts loaded. Aborting.")
+        return
 
     fake_ips = [f"192.168.1.{i}" for i in range(1, 51)]
 
@@ -131,14 +217,15 @@ def main():
     response_rows = []
     for i, prompt in enumerate(inserted_prompts):
         item = dataset[i]
-        # Model A gets base_response, Model B gets v1_response
+        failure_pool = item.get("failure_pool", FAILURE_TYPES)
+
         for model_idx, model in enumerate(MODELS):
             text = item["base_response"] if model_idx == 0 else item["v1_response"]
             if not text:
                 text = f"[Sample response from {model} for: {prompt['text'][:80]}...]"
 
             truth_score = round(random.uniform(0.55, 0.98), 3)
-            failure = random.choice(FAILURE_TYPES)
+            failure = random.choice(failure_pool)
 
             # If there's a failure, lower the truth score
             if failure:
