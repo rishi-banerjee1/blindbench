@@ -17,6 +17,70 @@ const FAILURE_DESCRIPTIONS = {
   straw_man: "Misrepresented the question or an argument.",
 };
 
+const FREE_MODELS = [
+  "google/gemini-2.0-flash",
+  "groq/llama-3.3-70b-versatile",
+];
+
+const BYOK_MODELS = [
+  "openai/gpt-4o",
+  "anthropic/claude-sonnet-4-20250514",
+];
+
+function FailureTable({ rows }) {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-800 text-gray-400">
+            <th className="px-4 py-3 text-left font-medium">Model</th>
+            <th className="px-4 py-3 text-left font-medium">Failure Type</th>
+            <th className="px-4 py-3 text-right font-medium">Count</th>
+            <th className="px-4 py-3 text-right font-medium">
+              Avg Truth Score
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={`${row.model}-${row.failure_type}`}
+              className="border-b border-gray-800/50 hover:bg-gray-800/30"
+            >
+              <td className="px-4 py-3 font-medium text-gray-200">
+                {escapeHtml(modelDisplayName(row.model))}
+              </td>
+              <td className="px-4 py-3">
+                <span className="text-red-400 text-xs bg-red-900/20 px-2 py-0.5 rounded-full">
+                  {row.failure_type.replace(/_/g, " ")}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-right font-mono text-gray-300">
+                {row.occurrence_count}
+              </td>
+              <td className="px-4 py-3 text-right font-mono">
+                <span
+                  className={
+                    row.avg_truth_score >= 0.7
+                      ? "text-green-400"
+                      : row.avg_truth_score >= 0.4
+                      ? "text-yellow-400"
+                      : "text-red-400"
+                  }
+                >
+                  {row.avg_truth_score !== null
+                    ? `${(row.avg_truth_score * 100).toFixed(0)}%`
+                    : "—"}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function FailureExplorer() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +114,9 @@ export default function FailureExplorer() {
   const filtered = selectedType
     ? data.filter((d) => d.failure_type === selectedType)
     : data;
+
+  const freeFiltered = filtered.filter((d) => FREE_MODELS.includes(d.model));
+  const byokFiltered = filtered.filter((d) => BYOK_MODELS.includes(d.model));
 
   return (
     <div className="space-y-6">
@@ -118,63 +185,53 @@ export default function FailureExplorer() {
             </div>
           )}
 
-          {/* Data table */}
-          <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800 text-gray-400">
-                  <th className="px-4 py-3 text-left font-medium">Model</th>
-                  <th className="px-4 py-3 text-left font-medium">
-                    Failure Type
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium">Count</th>
-                  <th className="px-4 py-3 text-right font-medium">
-                    Avg Truth Score
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row, i) => (
-                  <tr
-                    key={`${row.model}-${row.failure_type}`}
-                    className="border-b border-gray-800/50 hover:bg-gray-800/30"
-                  >
-                    <td className="px-4 py-3 font-medium text-gray-200">
-                      {escapeHtml(modelDisplayName(row.model))}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-red-400 text-xs bg-red-900/20 px-2 py-0.5 rounded-full">
-                        {row.failure_type.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-300">
-                      {row.occurrence_count}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono">
-                      <span
-                        className={
-                          row.avg_truth_score >= 0.7
-                            ? "text-green-400"
-                            : row.avg_truth_score >= 0.4
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                        }
-                      >
-                        {row.avg_truth_score !== null
-                          ? `${(row.avg_truth_score * 100).toFixed(0)}%`
-                          : "—"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Free Models Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-400" />
+              <h2 className="text-lg font-semibold text-gray-200">
+                Free Models
+              </h2>
+              <span className="text-xs text-gray-500 ml-1">
+                Gemini &amp; Llama
+              </span>
+            </div>
+            {freeFiltered.length > 0 ? (
+              <FailureTable rows={freeFiltered} />
+            ) : (
+              <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 text-gray-500 text-sm text-center">
+                No failures matching this filter for free models.
+              </div>
+            )}
+          </div>
+
+          {/* BYOK Models Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-200">
+                BYOK Models
+              </h2>
+              <span className="text-xs text-gray-500 ml-1">
+                GPT-4o &amp; Claude Sonnet 4
+              </span>
+            </div>
+            {byokFiltered.length > 0 ? (
+              <FailureTable rows={byokFiltered} />
+            ) : (
+              <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center">
+                <p className="text-gray-500 text-sm">
+                  No BYOK failure data yet. Add your API keys in the Arena to
+                  start analyzing GPT-4o and Claude Sonnet 4.
+                </p>
+              </div>
+            )}
           </div>
         </>
       )}
       <p className="text-xs text-gray-600 text-center">
-        Initial data seeded from Kaggle datasets (LLM EvaluationHub, Prompt Engineering).
-        Live results update as users submit prompts.
+        Initial data seeded from Kaggle datasets (LLM EvaluationHub, Prompt
+        Engineering). Live results update as users submit prompts.
       </p>
     </div>
   );
