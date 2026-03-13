@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Supabase local
+.supabase/
+supabase/.temp/
+
+# Dataset files (not part of repo)
+/tmp/
