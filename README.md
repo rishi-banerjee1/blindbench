@@ -1,18 +1,80 @@
 # BlindBench
 
-Blind-test LLM reasoning quality. Compare responses from Gemini, Groq, and optionally OpenAI/Anthropic (BYOK) side by side, with automated truth scoring and reasoning failure classification.
+**Which LLM do you actually trust?** Blind-test 100+ AI models. No branding, no marketing — just truth scores and failure classification.
+
+<p align="center">
+  <a href="https://rishi-banerjee1.github.io/blindbench/">Live Demo</a> &nbsp;&middot;&nbsp;
+  <a href="#how-it-works">How It Works</a> &nbsp;&middot;&nbsp;
+  <a href="#datasets">Datasets</a> &nbsp;&middot;&nbsp;
+  <a href="#quick-start">Quick Start</a>
+</p>
+
+---
+
+## Why This Exists
+
+- Every AI company says their model is the best. **We remove the branding and let the outputs speak.**
+- Most LLM benchmarks test narrow skills. **We test reasoning failures** — hallucinations, sycophancy, overconfidence, circular reasoning.
+- Existing leaderboards rely on automated metrics. **BlindBench adds blind human voting** — you pick the better response before knowing which model wrote it.
+- BYOK-friendly: bring your own OpenAI or Anthropic key to add GPT-4o and Claude into the blind comparison. **Keys are never stored.**
+- **106+ models ranked** from GPT-5.2 to Gemma 3n, across frontier, open-source, and Chinese AI ecosystems.
+
+---
+
+## How It Works
+
+1. **Submit a prompt** — factual question, reasoning challenge, ethical dilemma
+2. **Compare blind** — side-by-side responses labeled Model A / Model B
+3. **Vote** — pick the better answer before identities are revealed
+4. **Explore failures** — see which models hallucinate, sycophant, or overcommit
+
+Every response gets:
+- A **truth score** (0-100%) measuring factual accuracy
+- A **failure classification** from 10 detected reasoning failure types
+
+---
+
+## What We Track
+
+| Failure Type | What It Means |
+|---|---|
+| Hallucination | Fabricated facts, citations, or data |
+| Sycophancy | Agreed with user when it shouldn't have |
+| Overconfidence | Stated uncertain things with false certainty |
+| Circular Reasoning | Conclusion presupposed in the premise |
+| False Premise Acceptance | Accepted a false premise without challenge |
+| Failure to Abstain | Should have said "I don't know" |
+| Logical Fallacy | Formal or informal logical errors |
+| Contradiction | Contradicted itself within the response |
+| Straw Man | Misrepresented the question or argument |
+| Anchoring Bias | Over-relied on first information given |
+
+---
+
+## Datasets
+
+BlindBench is seeded with 4 Kaggle datasets — **3,700+ prompts, 7,500+ responses, 9,000+ votes**.
+
+| Dataset | What It Covers | Size |
+|---|---|---|
+| **AI Models Benchmark 2026** | 180+ models with intelligence scores, pricing, speed | 233 models |
+| **LLM Benchmark Wars 2025-2026** | 24 frontier models with MMLU, HumanEval, GPQA, SWE-bench | 24 models |
+| **LLM EvaluationHub** | Offensiveness, bias, and ethics evaluation | 1,700+ prompts |
+| **Prompt Engineering Dataset** | Diverse prompts with base/improved response pairs | 1,400+ prompts |
+
+Live results update as real users submit prompts and vote.
 
 ---
 
 ## Architecture
 
 ```
-[Browser]  ──HTTPS──>  [GitHub Pages: React + Vite]
+[Browser]  ──HTTPS──>  [GitHub Pages: React + Vite + Tailwind]
                               │
                               │ Supabase anon key only
                               ▼
                         [Supabase Edge Functions]
-                         ├─ run-models
+                         ├─ run-models (multi-provider proxy)
                          ├─ truth-analyzer
                          └─ reasoning-analyzer
                               │
@@ -20,148 +82,95 @@ Blind-test LLM reasoning quality. Compare responses from Gemini, Groq, and optio
                     ▼         ▼          ▼
               [Gemini]   [Groq]    [Postgres]
               [OpenAI]*  [Anthropic]*  ├─ RLS policies
-              (* = BYOK only)         ├─ Rate limits
-                                      └─ Materialized views
+              (* = BYOK only)         ├─ Materialized views
+                                      └─ Rate limits
 ```
 
-**Key security property**: API keys never reach the browser. The frontend only knows the Supabase public anon key. All LLM calls happen server-side in Edge Functions.
-
-**BYOK security**: User-provided keys are sent over encrypted HTTPS, used for one request only, then discarded. Keys are never stored in any database, never logged, and never leave the server-side function.
+**Key property**: API keys never reach the browser. All LLM calls happen server-side.
 
 ---
 
 ## Security Model
 
 | Layer | Protection |
-|-------|-----------|
-| Frontend | DOMPurify sanitization, CSP headers, no raw HTML rendering |
-| Transport | HTTPS only, CORS restricted to allowed origin |
-| BYOK Keys | Sent over HTTPS, used once per request, never stored or logged |
-| Edge Functions | Input validation, rate limiting (5/min/IP), IP hashing (SHA-256) |
+|---|---|
+| Frontend | DOMPurify sanitization, no raw HTML rendering |
+| Transport | HTTPS only, CORS restricted |
+| BYOK Keys | Encrypted in transit, used once, never stored or logged |
+| Edge Functions | Input validation, rate limiting (5/min/IP), SHA-256 IP hashing |
 | Database | Row Level Security on all tables, parameterized queries |
-| Secrets | API keys in Supabase env vars, never in frontend code |
+| Privacy | No cookies, no tracking, no analytics |
 
 Full threat model: [`security/threat_model.md`](security/threat_model.md)
 
 ---
 
-## Environment Setup
+## Quick Start
 
-### Prerequisites
+**2 minutes to run locally:**
 
-- Node.js 18+
-- Supabase account with a project
-- Gemini API key (free)
-- Groq API key (free)
+```bash
+# 1. Clone
+git clone https://github.com/rishi-banerjee1/blindbench.git
+cd blindbench/frontend
 
-### 1. Database Setup
+# 2. Configure
+cp .env.example .env
+# Edit .env with your Supabase URL and anon key
 
-Run these SQL files in the Supabase SQL Editor (in order):
+# 3. Install & Run
+npm install
+npm run dev
+```
 
+### Database Setup
+
+Run in Supabase SQL Editor (in order):
 ```
 supabase/database/schema.sql
 supabase/database/functions.sql
 supabase/database/rls_policies.sql
 ```
 
-### 2. Supabase Edge Functions
-
-Set environment variables in Supabase Dashboard > Edge Functions > Secrets:
-
-```
-GEMINI_API_KEY=...
-GROQ_API_KEY=...
-ALLOWED_ORIGIN=https://yourusername.github.io
-```
-
-Deploy functions using the Supabase CLI:
+### Edge Functions
 
 ```bash
+# Set secrets
+supabase secrets set GEMINI_API_KEY=... GROQ_API_KEY=... ALLOWED_ORIGIN=...
+
+# Deploy
 supabase functions deploy run-models
 supabase functions deploy truth-analyzer
 supabase functions deploy reasoning-analyzer
 ```
 
-### 3. Frontend
-
-```bash
-cd frontend
-cp .env.example .env
-# Edit .env with your Supabase URL and anon key
-npm install
-npm run dev
-```
-
 ---
 
-## BYOK (Bring Your Own Key)
-
-Users can optionally add their own API keys for premium models:
-
-| Provider | Model | How to get a key |
-|----------|-------|------------------|
-| OpenAI | GPT-4o | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-| Anthropic | Claude Sonnet 4 | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
-
-BYOK keys are:
-- Sent over encrypted HTTPS to the server-side edge function
-- Used for the current request only, then immediately discarded
-- Never stored in any database or log
-- Never transmitted anywhere except to the LLM provider's API
-
----
-
-## Deployment
-
-### GitHub Pages
-
-```bash
-cd frontend
-npm run deploy
-```
-
-This runs `vite build` then pushes the `dist/` folder to the `gh-pages` branch.
-
-Configure in GitHub repo settings:
-- Pages source: Deploy from branch `gh-pages`, root `/`
-
-### Environment Variables
+## Environment Variables
 
 | Variable | Where | Purpose |
-|----------|-------|---------|
+|---|---|---|
 | `VITE_SUPABASE_URL` | Frontend `.env` | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Frontend `.env` | Public anon key (safe for client) |
-| `GEMINI_API_KEY` | Supabase secrets | Server-side only (free) |
-| `GROQ_API_KEY` | Supabase secrets | Server-side only (free) |
+| `GEMINI_API_KEY` | Supabase secrets | Server-side only (free tier) |
+| `GROQ_API_KEY` | Supabase secrets | Server-side only (free tier) |
 | `ALLOWED_ORIGIN` | Supabase secrets | CORS origin restriction |
-| `SUPABASE_URL` | Auto-injected | Available in Edge Functions |
-| `SUPABASE_SERVICE_ROLE_KEY` | Auto-injected | Available in Edge Functions |
 
 ---
 
-## Repository Structure
+## Tech Stack
 
-```
-blindbench/
-  frontend/
-    src/
-      components/    Layout, PromptInput, ResponseCard, BYOKPanel
-      pages/         Home, Arena, Leaderboard, FailureExplorer
-      services/      Supabase client, API service layer
-      utils/         Sanitization utilities
-  supabase/
-    functions/
-      _shared/       CORS, validation, rate limiting
-      run-models/    Proxy LLM calls to Gemini + Groq (+ BYOK OpenAI/Anthropic)
-      truth-analyzer/    Factual accuracy scoring
-      reasoning-analyzer/ Reasoning failure classification
-    database/
-      schema.sql     Tables, indexes, materialized views
-      functions.sql  Rate limit increment, view refresh
-      rls_policies.sql  Row Level Security policies
-  security/
-    threat_model.md  Risk analysis and mitigations
-```
+- **Frontend**: React 19 + Vite + TailwindCSS v4
+- **Backend**: Supabase Edge Functions (Deno)
+- **Database**: PostgreSQL with materialized views
+- **Hosting**: GitHub Pages
+- **LLM Providers**: Google Gemini, Groq (Llama), OpenAI, Anthropic (BYOK)
+
+---
+
+## Contributing
+
+PRs welcome. If you want to add a model provider, see `supabase/functions/run-models/index.ts` — the model registry pattern makes it straightforward.
 
 ---
 

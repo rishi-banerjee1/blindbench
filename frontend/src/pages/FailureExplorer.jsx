@@ -17,66 +17,122 @@ const FAILURE_DESCRIPTIONS = {
   straw_man: "Misrepresented the question or an argument.",
 };
 
-const FREE_MODELS = [
-  "google/gemini-2.0-flash",
-  "groq/llama-3.3-70b-versatile",
-];
+function FailureCard({ type, models, isExpanded, onToggle }) {
+  const top5 = models.slice(0, 5);
+  const totalCount = models.reduce((sum, m) => sum + m.occurrence_count, 0);
+  const avgScore =
+    models.reduce((sum, m) => sum + (m.avg_truth_score || 0) * m.occurrence_count, 0) /
+    totalCount;
 
-const BYOK_MODELS = [
-  "openai/gpt-4o",
-  "anthropic/claude-sonnet-4-20250514",
-];
-
-function FailureTable({ rows }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-800 text-gray-400">
-            <th className="px-4 py-3 text-left font-medium">Model</th>
-            <th className="px-4 py-3 text-left font-medium">Failure Type</th>
-            <th className="px-4 py-3 text-right font-medium">Count</th>
-            <th className="px-4 py-3 text-right font-medium">
-              Avg Truth Score
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={`${row.model}-${row.failure_type}`}
-              className="border-b border-gray-800/50 hover:bg-gray-800/30"
-            >
-              <td className="px-4 py-3 font-medium text-gray-200">
-                {escapeHtml(modelDisplayName(row.model))}
-              </td>
-              <td className="px-4 py-3">
-                <span className="text-red-400 text-xs bg-red-900/20 px-2 py-0.5 rounded-full">
-                  {row.failure_type.replace(/_/g, " ")}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-gray-300">
-                {row.occurrence_count}
-              </td>
-              <td className="px-4 py-3 text-right font-mono">
-                <span
-                  className={
-                    row.avg_truth_score >= 0.7
-                      ? "text-green-400"
-                      : row.avg_truth_score >= 0.4
-                      ? "text-yellow-400"
-                      : "text-red-400"
-                  }
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-red-400 text-xs bg-red-900/20 px-2.5 py-1 rounded-full font-medium">
+            {type.replace(/_/g, " ")}
+          </span>
+          <span className="text-gray-500 text-xs">
+            {models.length} model{models.length !== 1 ? "s" : ""} &middot;{" "}
+            {totalCount} total occurrences
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          <span
+            className={`text-sm font-mono ${
+              avgScore >= 0.7
+                ? "text-green-400"
+                : avgScore >= 0.4
+                ? "text-yellow-400"
+                : "text-red-400"
+            }`}
+          >
+            {(avgScore * 100).toFixed(0)}% avg
+          </span>
+          <span className="text-gray-500 text-sm">
+            {isExpanded ? "▼" : "▶"}
+          </span>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="border-t border-gray-800">
+          {FAILURE_DESCRIPTIONS[type] && (
+            <div className="px-4 py-2 text-xs text-gray-500 bg-gray-900/50">
+              {FAILURE_DESCRIPTIONS[type]}
+            </div>
+          )}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 text-gray-500">
+                <th className="px-4 py-2 text-left font-medium text-xs">
+                  Model
+                </th>
+                <th className="px-4 py-2 text-right font-medium text-xs">
+                  Count
+                </th>
+                <th className="px-4 py-2 text-right font-medium text-xs">
+                  Avg Truth Score
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {(isExpanded === "all" ? models : top5).map((row) => (
+                <tr
+                  key={row.model}
+                  className="border-b border-gray-800/30 hover:bg-gray-800/20"
                 >
-                  {row.avg_truth_score !== null
-                    ? `${(row.avg_truth_score * 100).toFixed(0)}%`
-                    : "—"}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                  <td className="px-4 py-2 text-gray-300 text-xs">
+                    {escapeHtml(modelDisplayName(row.model))}
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono text-gray-400 text-xs">
+                    {row.occurrence_count}
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono text-xs">
+                    <span
+                      className={
+                        row.avg_truth_score >= 0.7
+                          ? "text-green-400"
+                          : row.avg_truth_score >= 0.4
+                          ? "text-yellow-400"
+                          : "text-red-400"
+                      }
+                    >
+                      {row.avg_truth_score !== null
+                        ? `${(row.avg_truth_score * 100).toFixed(0)}%`
+                        : "—"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {models.length > 5 && isExpanded !== "all" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle("all");
+              }}
+              className="w-full py-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-gray-800/30 transition-colors"
+            >
+              Show all {models.length} models
+            </button>
+          )}
+          {isExpanded === "all" && models.length > 5 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle(true);
+              }}
+              className="w-full py-2 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800/30 transition-colors"
+            >
+              Show top 5 only
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -85,7 +141,7 @@ export default function FailureExplorer() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedType, setSelectedType] = useState(null);
+  const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -107,23 +163,38 @@ export default function FailureExplorer() {
     };
   }, []);
 
-  // Get unique failure types
-  const failureTypes = [...new Set(data.map((d) => d.failure_type))];
+  // Group by failure type, sorted by total occurrences
+  const grouped = {};
+  for (const row of data) {
+    if (!grouped[row.failure_type]) grouped[row.failure_type] = [];
+    grouped[row.failure_type].push(row);
+  }
 
-  // Filter by selected type
-  const filtered = selectedType
-    ? data.filter((d) => d.failure_type === selectedType)
-    : data;
+  const sortedTypes = Object.entries(grouped)
+    .map(([type, models]) => ({
+      type,
+      models: models.sort((a, b) => b.occurrence_count - a.occurrence_count),
+      total: models.reduce((s, m) => s + m.occurrence_count, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
 
-  const freeFiltered = filtered.filter((d) => FREE_MODELS.includes(d.model));
-  const byokFiltered = filtered.filter((d) => BYOK_MODELS.includes(d.model));
+  function toggleExpand(type, mode) {
+    setExpanded((prev) => {
+      if (mode === "all") return { ...prev, [type]: "all" };
+      if (mode === true) return { ...prev, [type]: true };
+      return { ...prev, [type]: prev[type] ? false : true };
+    });
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold mb-2">Failure Explorer</h1>
         <p className="text-gray-400 text-sm">
-          Browse reasoning failure patterns detected across model responses.
+          Reasoning failure patterns detected across {
+            new Set(data.map((d) => d.model)).size
+          }{" "}
+          models. Click a category to see top offenders.
         </p>
       </div>
 
@@ -146,92 +217,23 @@ export default function FailureExplorer() {
         </div>
       )}
 
-      {data.length > 0 && (
-        <>
-          {/* Filter chips */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedType(null)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                selectedType === null
-                  ? "bg-amber-400/20 text-amber-400"
-                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-              }`}
-            >
-              All
-            </button>
-            {failureTypes.map((type) => (
-              <button
-                key={type}
-                onClick={() => setSelectedType(type)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  selectedType === type
-                    ? "bg-amber-400/20 text-amber-400"
-                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                }`}
-              >
-                {type.replace(/_/g, " ")}
-              </button>
-            ))}
-          </div>
-
-          {/* Failure description */}
-          {selectedType && FAILURE_DESCRIPTIONS[selectedType] && (
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 text-sm text-gray-400">
-              <span className="text-amber-400 font-medium">
-                {selectedType.replace(/_/g, " ")}
-              </span>
-              : {FAILURE_DESCRIPTIONS[selectedType]}
-            </div>
-          )}
-
-          {/* Free Models Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-              <h2 className="text-lg font-semibold text-gray-200">
-                Free Models
-              </h2>
-              <span className="text-xs text-gray-500 ml-1">
-                Gemini &amp; Llama
-              </span>
-            </div>
-            {freeFiltered.length > 0 ? (
-              <FailureTable rows={freeFiltered} />
-            ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 text-gray-500 text-sm text-center">
-                No failures matching this filter for free models.
-              </div>
-            )}
-          </div>
-
-          {/* BYOK Models Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-gray-500" />
-              <h2 className="text-lg font-semibold text-gray-200">
-                BYOK Models
-              </h2>
-              <span className="text-xs text-gray-500 ml-1">
-                GPT-4o &amp; Claude Sonnet 4
-              </span>
-            </div>
-            {byokFiltered.length > 0 ? (
-              <FailureTable rows={byokFiltered} />
-            ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-500 text-sm">
-                  No BYOK failure data yet. Add your API keys in the Arena to
-                  start analyzing GPT-4o and Claude Sonnet 4.
-                </p>
-              </div>
-            )}
-          </div>
-        </>
+      {sortedTypes.length > 0 && (
+        <div className="space-y-3">
+          {sortedTypes.map(({ type, models }) => (
+            <FailureCard
+              key={type}
+              type={type}
+              models={models}
+              isExpanded={expanded[type]}
+              onToggle={(mode) => toggleExpand(type, mode)}
+            />
+          ))}
+        </div>
       )}
+
       <p className="text-xs text-gray-600 text-center">
-        Initial data seeded from Kaggle datasets (LLM EvaluationHub, Prompt
-        Engineering). Live results update as users submit prompts.
+        Data from 4 Kaggle datasets (LLM EvaluationHub, Prompt Engineering, AI
+        Models Benchmark 2026). Live results update as users submit prompts.
       </p>
     </div>
   );

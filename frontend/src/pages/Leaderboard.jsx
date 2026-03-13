@@ -1,26 +1,10 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { fetchLeaderboard } from "../services/api";
 import { escapeHtml } from "../utils/sanitize";
 import { modelDisplayName } from "../utils/models";
 
-const FREE_MODELS = [
-  "google/gemini-2.0-flash",
-  "groq/llama-3.3-70b-versatile",
-];
-
-const BYOK_MODELS = [
-  "openai/gpt-4o",
-  "anthropic/claude-sonnet-4-20250514",
-];
-
-function padModels(data, modelIds) {
-  const existing = new Map(data.map((r) => [r.model, r]));
-  return modelIds.map((id) =>
-    existing.get(id) || { model: id, total_wins: 0, win_rate_pct: 0 }
-  );
-}
-
-function LeaderboardTable({ rows, startRank = 1 }) {
+function LeaderboardTable({ rows, startRank = 1, showMedal = false }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       <table className="w-full text-sm">
@@ -33,33 +17,40 @@ function LeaderboardTable({ rows, startRank = 1 }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
-            <tr
-              key={row.model}
-              className="border-b border-gray-800/50 hover:bg-gray-800/30"
-            >
-              <td className="px-4 py-3 text-gray-500 font-mono">
-                #{startRank + i}
-              </td>
-              <td className="px-4 py-3 font-medium text-gray-200">
-                {escapeHtml(modelDisplayName(row.model))}
-              </td>
-              <td className="px-4 py-3 text-right text-gray-300 font-mono">
-                {row.total_wins}
-              </td>
-              <td className="px-4 py-3 text-right">
-                <span
-                  className={`font-mono ${
-                    i === 0 && row.total_wins > 0
-                      ? "text-amber-400"
-                      : "text-gray-400"
-                  }`}
-                >
-                  {row.win_rate_pct}%
-                </span>
-              </td>
-            </tr>
-          ))}
+          {rows.map((row, i) => {
+            const rank = startRank + i;
+            const medal =
+              showMedal && rank === 1
+                ? "text-amber-400"
+                : showMedal && rank === 2
+                ? "text-gray-300"
+                : showMedal && rank === 3
+                ? "text-orange-400"
+                : "text-gray-500";
+            return (
+              <tr
+                key={row.model}
+                className="border-b border-gray-800/50 hover:bg-gray-800/30"
+              >
+                <td className={`px-4 py-3 font-mono ${medal}`}>#{rank}</td>
+                <td className="px-4 py-3 font-medium text-gray-200">
+                  {escapeHtml(modelDisplayName(row.model))}
+                </td>
+                <td className="px-4 py-3 text-right text-gray-300 font-mono">
+                  {row.total_wins}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <span
+                    className={`font-mono ${
+                      rank <= 3 && showMedal ? "text-amber-400" : "text-gray-400"
+                    }`}
+                  >
+                    {row.win_rate_pct}%
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -91,19 +82,22 @@ export default function Leaderboard() {
     };
   }, []);
 
-  const freeRows = padModels(data, FREE_MODELS).sort(
-    (a, b) => b.total_wins - a.total_wins
-  );
-  const byokRows = padModels(data, BYOK_MODELS).sort(
-    (a, b) => b.total_wins - a.total_wins
-  );
+  const top10 = data.slice(0, 10);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold mb-2">Leaderboard</h1>
         <p className="text-gray-400 text-sm">
-          Model rankings based on community votes in blind comparisons.
+          Top 10 model rankings based on community votes in blind comparisons.
+          {data.length > 10 && (
+            <Link
+              to="/all-models"
+              className="ml-2 text-amber-400 hover:text-amber-300 underline"
+            >
+              View all {data.length} models
+            </Link>
+          )}
         </p>
       </div>
 
@@ -125,49 +119,26 @@ export default function Leaderboard() {
         </div>
       )}
 
-      {!loading && !error && data.length > 0 && (
+      {!loading && !error && top10.length > 0 && (
         <>
-          {/* Free Models Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-              <h2 className="text-lg font-semibold text-gray-200">
-                Free Models
-              </h2>
-              <span className="text-xs text-gray-500 ml-1">
-                Gemini &amp; Llama — no API key required
-              </span>
-            </div>
-            <LeaderboardTable rows={freeRows} startRank={1} />
-          </div>
+          <LeaderboardTable rows={top10} startRank={1} showMedal />
 
-          {/* BYOK Models Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-gray-500" />
-              <h2 className="text-lg font-semibold text-gray-200">
-                BYOK Models
-              </h2>
-              <span className="text-xs text-gray-500 ml-1">
-                Bring Your Own Key — GPT-4o &amp; Claude Sonnet 4
-              </span>
+          {data.length > 10 && (
+            <div className="text-center">
+              <Link
+                to="/all-models"
+                className="inline-block px-6 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white text-sm font-medium transition-colors"
+              >
+                View all {data.length} models
+              </Link>
             </div>
-            {byokRows.every((r) => r.total_wins === 0) ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-500 text-sm">
-                  No BYOK votes yet. Add your OpenAI or Anthropic key in the
-                  Arena to include these models in blind comparisons.
-                </p>
-              </div>
-            ) : (
-              <LeaderboardTable rows={byokRows} startRank={1} />
-            )}
-          </div>
+          )}
         </>
       )}
       <p className="text-xs text-gray-600 text-center">
-        Initial data seeded from Kaggle datasets (LLM EvaluationHub, Prompt
-        Engineering). Live results update as users submit prompts and vote.
+        Data from 4 Kaggle datasets (LLM EvaluationHub, Prompt Engineering, AI
+        Models Benchmark 2026). Live results update as users submit prompts and
+        vote.
       </p>
     </div>
   );
