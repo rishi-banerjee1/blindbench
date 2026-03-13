@@ -172,6 +172,10 @@ export default function FailureExplorer() {
           </div>
         </>
       )}
+      <p className="text-xs text-gray-600 text-center">
+        Initial data seeded from Kaggle datasets (LLM EvaluationHub, Prompt Engineering).
+        Live results update as users submit prompts.
+      </p>
     </div>
   );
 }
