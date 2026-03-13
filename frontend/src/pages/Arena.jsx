@@ -3,6 +3,7 @@ import PromptInput from "../components/PromptInput";
 import ResponseCard from "../components/ResponseCard";
 import BYOKPanel from "../components/BYOKPanel";
 import { submitPrompt, analyzeTruth, analyzeReasoning, submitVote } from "../services/api";
+import { modelDisplayName } from "../utils/models";
 
 export default function Arena() {
   const [loading, setLoading] = useState(false);
@@ -88,8 +89,9 @@ export default function Arena() {
       <div>
         <h1 className="text-2xl font-bold mb-2">Arena</h1>
         <p className="text-gray-400 text-sm">
-          Submit a prompt to compare model reasoning side by side. Models are
-          hidden until you vote.
+          Gemini 2.0 Flash vs Llama 3.3 70B — blind comparison.
+          Add your own keys below to include GPT-4o or Claude Sonnet 4.
+          Models are hidden until you vote.
         </p>
       </div>
 
@@ -107,7 +109,7 @@ export default function Arena() {
         <>
           <div className="grid md:grid-cols-2 gap-6">
             <ResponseCard
-              label={revealed ? modelA.model : "Model A"}
+              label={revealed ? modelDisplayName(modelA.model) : "Model A"}
               responseText={modelA.response_text}
               truthScore={getAnalysis(modelA.model).truthScore}
               failureType={getAnalysis(modelA.model).failureType}
@@ -116,7 +118,7 @@ export default function Arena() {
               voted={voted === modelA.model}
             />
             <ResponseCard
-              label={revealed ? modelB.model : "Model B"}
+              label={revealed ? modelDisplayName(modelB.model) : "Model B"}
               responseText={modelB.response_text}
               truthScore={getAnalysis(modelB.model).truthScore}
               failureType={getAnalysis(modelB.model).failureType}
@@ -129,7 +131,7 @@ export default function Arena() {
           {voted && (
             <div className="text-center text-sm text-gray-400">
               You voted for{" "}
-              <span className="text-amber-400 font-medium">{voted}</span>.
+              <span className="text-amber-400 font-medium">{modelDisplayName(voted)}</span>.
               Model identities revealed above.
             </div>
           )}

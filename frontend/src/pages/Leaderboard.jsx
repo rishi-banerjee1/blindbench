@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchLeaderboard } from "../services/api";
 import { escapeHtml } from "../utils/sanitize";
+import { modelDisplayName } from "../utils/models";
 
 export default function Leaderboard() {
   const [data, setData] = useState([]);
@@ -75,7 +76,7 @@ export default function Leaderboard() {
                     #{i + 1}
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-200">
-                    {escapeHtml(row.model)}
+                    {escapeHtml(modelDisplayName(row.model))}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-300 font-mono">
                     {row.total_wins}

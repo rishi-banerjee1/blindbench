@@ -9,9 +9,9 @@ export default function Home() {
           <span className="text-amber-400">Blind</span>Bench
         </h1>
         <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-          Blind-test LLM reasoning quality. Submit a prompt, compare
-          responses from leading models, and vote on which reasons better.
-          All evaluations include truth scoring and failure classification.
+          Blind-test LLM reasoning quality. Gemini and Llama go head to head —
+          add your own OpenAI or Anthropic key to throw GPT-4o and Claude into the ring.
+          Every response gets truth-scored and failure-classified.
         </p>
         <Link
           to="/arena"
@@ -21,12 +21,45 @@ export default function Home() {
         </Link>
       </section>
 
+      {/* Models */}
+      <section className="grid md:grid-cols-2 gap-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-3">
+          <h3 className="text-amber-400 font-semibold">Free Models (Always On)</h3>
+          <div className="space-y-2 text-sm text-gray-400">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-400 shrink-0"></span>
+              <span><strong className="text-gray-200">Gemini 2.0 Flash</strong> — Google</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-400 shrink-0"></span>
+              <span><strong className="text-gray-200">Llama 3.3 70B</strong> — via Groq</span>
+            </div>
+          </div>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-3">
+          <h3 className="text-amber-400 font-semibold">BYOK Models (Bring Your Key)</h3>
+          <div className="space-y-2 text-sm text-gray-400">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-600 shrink-0"></span>
+              <span><strong className="text-gray-200">GPT-4o</strong> — OpenAI key required</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-600 shrink-0"></span>
+              <span><strong className="text-gray-200">Claude Sonnet 4</strong> — Anthropic key required</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Keys are encrypted in transit, used once, then discarded. Never stored.
+          </p>
+        </div>
+      </section>
+
       {/* How it works */}
       <section className="grid md:grid-cols-3 gap-6">
         {[
           {
             title: "1. Submit a Prompt",
-            desc: "Ask a factual question or pose a reasoning challenge. Your prompt is sent to multiple LLMs simultaneously.",
+            desc: "Ask a factual question or reasoning challenge. Your prompt hits Gemini + Llama (and BYOK models if you added keys) simultaneously.",
           },
           {
             title: "2. Compare Blindly",
@@ -51,12 +84,14 @@ export default function Home() {
       <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-3">
         <h2 className="text-lg font-semibold">Security by Design</h2>
         <ul className="text-sm text-gray-400 space-y-1.5 list-disc list-inside">
-          <li>API keys never touch the browser — all LLM calls happen server-side</li>
-          <li>BYOK keys are sent over HTTPS, used once, then discarded — never stored or logged</li>
-          <li>IP addresses are SHA-256 hashed — we never store raw IPs</li>
+          <li>All LLM calls happen server-side — API keys never touch the browser</li>
+          <li>BYOK keys are encrypted over HTTPS, used for one request only, then immediately discarded</li>
+          <li>Keys are never stored in any database, never logged, never sent anywhere except the LLM provider</li>
+          <li>IP addresses are SHA-256 hashed — raw IPs are never stored</li>
           <li>Row Level Security on all database tables</li>
           <li>Rate limiting: max 5 submissions per minute</li>
-          <li>All model output is sanitized before display</li>
+          <li>All model output is sanitized with DOMPurify before display</li>
+          <li>Fully open source — verify the edge functions yourself</li>
         </ul>
       </section>
     </div>

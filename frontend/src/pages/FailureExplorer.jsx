@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchFailureSummary } from "../services/api";
 import { escapeHtml } from "../utils/sanitize";
+import { modelDisplayName } from "../utils/models";
 
 const FAILURE_DESCRIPTIONS = {
   hallucination: "Fabricated facts, citations, or data that don't exist.",
@@ -139,7 +140,7 @@ export default function FailureExplorer() {
                     className="border-b border-gray-800/50 hover:bg-gray-800/30"
                   >
                     <td className="px-4 py-3 font-medium text-gray-200">
-                      {escapeHtml(row.model)}
+                      {escapeHtml(modelDisplayName(row.model))}
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-red-400 text-xs bg-red-900/20 px-2 py-0.5 rounded-full">

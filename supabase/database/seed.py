@@ -12,7 +12,7 @@ import urllib.request
 SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 SERVICE_ROLE_KEY = "YOUR_SERVICE_ROLE_KEY"
 
-MODELS = ["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"]
+MODELS = ["google/gemini-2.0-flash", "groq/llama-3.3-70b-versatile"]
 
 FAILURE_TYPES = [
     "hallucination",
