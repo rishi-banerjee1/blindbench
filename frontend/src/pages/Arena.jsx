@@ -4,6 +4,10 @@ import ResponseCard from "../components/ResponseCard";
 import BYOKPanel from "../components/BYOKPanel";
 import { submitPrompt, analyzeTruth, analyzeReasoning, submitVote, runStabilityTest, runPerturbationTest } from "../services/api";
 import { modelDisplayName } from "../utils/models";
+import { computeStabilityScore } from "../analytics/stabilityEmbedding";
+import { detectFailurePatterns } from "../analytics/failurePatterns";
+import { analyzePerturbations, perturbationLabel } from "../analytics/perturbationAnalysis";
+import { estimateTokens } from "../analytics/tokenAnalysis";
 
 export default function Arena() {
   const [loading, setLoading] = useState(false);
@@ -17,6 +21,7 @@ export default function Arena() {
   const [stabilityResult, setStabilityResult] = useState(null);
   const [perturbationLoading, setPerturbationLoading] = useState(false);
   const [perturbationResult, setPerturbationResult] = useState(null);
+  const [embeddingStability, setEmbeddingStability] = useState(null);
 
   async function handleSubmit(prompt) {
     setLoading(true);
@@ -27,6 +32,7 @@ export default function Arena() {
     setRevealed(false);
     setStabilityResult(null);
     setPerturbationResult(null);
+    setEmbeddingStability(null);
 
     try {
       // Build BYOK payload — only include non-empty keys
@@ -64,6 +70,17 @@ export default function Arena() {
     try {
       const data = await runStabilityTest(promptId);
       setStabilityResult(data);
+
+      // Compute embedding/TF-IDF stability scores (frontend-only, Step 1)
+      const embResults = {};
+      for (const sr of (data.stability_results || [])) {
+        const texts = sr.run_details?.map((d) => d.response_text).filter(Boolean) || [];
+        if (texts.length >= 2) {
+          const openaiKey = byokKeys.openai_key?.trim() || null;
+          embResults[sr.model] = await computeStabilityScore(texts, openaiKey);
+        }
+      }
+      setEmbeddingStability(embResults);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -159,10 +176,33 @@ export default function Arena() {
           </div>
 
           {voted && (
-            <div className="text-center text-sm text-gray-400">
-              You voted for{" "}
-              <span className="text-amber-400 font-medium">{modelDisplayName(voted)}</span>.
-              Model identities revealed above.
+            <div className="text-center text-sm text-gray-400 space-y-2">
+              <p>
+                You voted for{" "}
+                <span className="text-amber-400 font-medium">{modelDisplayName(voted)}</span>.
+                Model identities revealed above.
+              </p>
+              {/* Secondary failure patterns (Step 2) */}
+              {responses.map((r) => {
+                const patterns = detectFailurePatterns(r.response_text, getAnalysis(r.model).failureType);
+                const tokens = estimateTokens(r.response_text);
+                if (patterns.length === 0 && !tokens) return null;
+                return (
+                  <div key={r.model} className="text-xs text-gray-500">
+                    {modelDisplayName(r.model)}: ~{tokens} tokens
+                    {patterns.length > 0 && (
+                      <span className="ml-2">
+                        Secondary patterns:{" "}
+                        {patterns.map((p) => (
+                          <span key={p.pattern} className="text-purple-400 ml-1">
+                            {p.pattern.replace(/_/g, " ")}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -189,38 +229,66 @@ export default function Arena() {
                 </button>
               </div>
               {stabilityResult && (
-                <div className="text-xs text-gray-400 space-y-1 border-t border-gray-800 pt-2">
+                <div className="text-xs text-gray-400 space-y-2 border-t border-gray-800 pt-2">
                   <p className="text-gray-300 font-medium">Stability Results:</p>
                   {stabilityResult.stability_results?.map((sr) => (
-                    <p key={sr.model}>
-                      {modelDisplayName(sr.model)}:{" "}
-                      <span className="font-mono text-blue-400">
-                        {(sr.stability_score * 100).toFixed(0)}%
-                      </span>{" "}
-                      consistent across {sr.run_details?.length || 3} runs
-                    </p>
+                    <div key={sr.model} className="space-y-0.5">
+                      <p>
+                        {modelDisplayName(sr.model)}:{" "}
+                        <span className="font-mono text-blue-400">
+                          {(sr.stability_score * 100).toFixed(0)}%
+                        </span>{" "}
+                        Jaccard across {sr.run_details?.length || 3} runs
+                        {embeddingStability?.[sr.model] && (
+                          <>
+                            {" "}| <span className="font-mono text-cyan-400">
+                              {(embeddingStability[sr.model].score * 100).toFixed(0)}%
+                            </span>{" "}
+                            {embeddingStability[sr.model].method === "embedding" ? "embedding cosine" : "TF-IDF cosine"}
+                          </>
+                        )}
+                      </p>
+                    </div>
                   ))}
                 </div>
               )}
-              {perturbationResult && (
-                <div className="text-xs text-gray-400 space-y-1 border-t border-gray-800 pt-2">
-                  <p className="text-gray-300 font-medium">Prompt Sensitivity:</p>
-                  <p>
-                    Sensitivity score:{" "}
-                    <span className="font-mono text-amber-400">
-                      {(perturbationResult.sensitivity_score * 100).toFixed(0)}%
-                    </span>
-                  </p>
-                  <p className="text-gray-500">
-                    {perturbationResult.variants?.length || 0} variants tested.{" "}
-                    {perturbationResult.sensitivity_score < 0.3
-                      ? "Models are robust to rephrasing."
-                      : perturbationResult.sensitivity_score < 0.6
-                      ? "Moderate sensitivity to rephrasing."
-                      : "High sensitivity — models give different answers to equivalent prompts."}
-                  </p>
-                </div>
-              )}
+              {perturbationResult && (() => {
+                const pertAnalysis = result?.responses?.[0]?.response_text
+                  ? analyzePerturbations(
+                      result.responses[0].response_text,
+                      perturbationResult.variants || []
+                    )
+                  : null;
+                return (
+                  <div className="text-xs text-gray-400 space-y-1 border-t border-gray-800 pt-2">
+                    <p className="text-gray-300 font-medium">Prompt Sensitivity:</p>
+                    <p>
+                      Sensitivity score:{" "}
+                      <span className="font-mono text-amber-400">
+                        {(perturbationResult.sensitivity_score * 100).toFixed(0)}%
+                      </span>
+                    </p>
+                    <p className="text-gray-500">
+                      {perturbationResult.variants?.length || 0} variants tested.{" "}
+                      {perturbationResult.sensitivity_score < 0.3
+                        ? "Models are robust to rephrasing."
+                        : perturbationResult.sensitivity_score < 0.6
+                        ? "Moderate sensitivity to rephrasing."
+                        : "High sensitivity — models give different answers to equivalent prompts."}
+                    </p>
+                    {pertAnalysis && Object.keys(pertAnalysis.distribution).length > 0 && (
+                      <div className="pt-1">
+                        <span className="text-gray-500">Perturbation types: </span>
+                        {Object.entries(pertAnalysis.distribution).map(([type, count]) => (
+                          <span key={type} className="text-purple-400 mr-2">
+                            {perturbationLabel(type)} ({count})
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 

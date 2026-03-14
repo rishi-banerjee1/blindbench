@@ -1,6 +1,9 @@
 import { useState, useEffect, Fragment } from "react";
 import { fetchEvaluationRecords, exportDataset } from "../services/api";
 import { modelDisplayName } from "../utils/models";
+import { estimateTokens } from "../analytics/tokenAnalysis";
+import { estimateConfidence, calibrationError } from "../analytics/calibrationAnalysis";
+import { detectFailurePatterns } from "../analytics/failurePatterns";
 
 const PAGE_SIZE = 25;
 
@@ -31,25 +34,57 @@ export default function DatasetExplorer() {
     return () => { cancelled = true; };
   }, [page]);
 
-  async function handleExport(format) {
+  function enrichRecord(r) {
+    const tokens = estimateTokens(r.response_text);
+    const confResult = estimateConfidence(r.response_text);
+    const calError = calibrationError(r.response_text, r.truth_score);
+    const secondaryPatterns = detectFailurePatterns(r.response_text, r.failure_type);
+    return {
+      ...r,
+      response_token_estimate: tokens,
+      estimated_confidence: confResult.confidence,
+      confidence_calibration_error: calError,
+      secondary_failure_patterns: secondaryPatterns.map((p) => p.pattern).join(", ") || null,
+    };
+  }
+
+  async function handleExport(format, enriched = false) {
     setExporting(true);
     setError(null);
     try {
-      const data = await exportDataset(format, { limit: 1000 });
-      const content = format === "csv" ? data : JSON.stringify(data, null, 2);
-      const mimeType = format === "csv" ? "text/csv" : "application/json";
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `blindbench_export.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const data = await exportDataset("json", { limit: 1000 });
+      const output = enriched ? data.map(enrichRecord) : data;
+
+      if (format === "csv") {
+        const headers = enriched
+          ? ["prompt_id","prompt_text","model","response_text","truth_score","failure_type","stability_score","total_votes","votes_won","won_vote","response_token_estimate","estimated_confidence","confidence_calibration_error","secondary_failure_patterns","prompt_created_at"]
+          : ["prompt_id","prompt_text","model","response_text","truth_score","failure_type","stability_score","total_votes","votes_won","won_vote","prompt_created_at"];
+        const escape = (v) => {
+          const s = v == null ? "" : String(v);
+          return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const rows = [headers.join(","), ...output.map((r) => headers.map((h) => escape(r[h])).join(","))];
+        const content = rows.join("\n");
+        downloadBlob(content, "text/csv", `blindbench_${enriched ? "enriched" : "export"}.csv`);
+      } else {
+        const content = JSON.stringify(output, null, 2);
+        downloadBlob(content, "application/json", `blindbench_${enriched ? "enriched" : "export"}.json`);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setExporting(false);
     }
+  }
+
+  function downloadBlob(content, mimeType, filename) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function truncate(text, maxLen = 80) {
@@ -71,7 +106,7 @@ export default function DatasetExplorer() {
         <div className="text-sm text-gray-400">
           Page {page + 1} &middot; Showing up to {PAGE_SIZE} records
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => handleExport("json")}
             disabled={exporting}
@@ -85,6 +120,22 @@ export default function DatasetExplorer() {
             className="px-4 py-2 text-xs bg-gray-800 text-gray-300 rounded-md hover:bg-gray-700 disabled:opacity-40 transition-colors"
           >
             {exporting ? "Exporting..." : "Export CSV"}
+          </button>
+          <button
+            onClick={() => handleExport("json", true)}
+            disabled={exporting}
+            className="px-4 py-2 text-xs bg-amber-900/30 text-amber-400 rounded-md hover:bg-amber-900/50 disabled:opacity-40 transition-colors"
+            title="Includes derived metrics: token estimates, confidence calibration, secondary failure patterns"
+          >
+            {exporting ? "Exporting..." : "Export Enriched JSON"}
+          </button>
+          <button
+            onClick={() => handleExport("csv", true)}
+            disabled={exporting}
+            className="px-4 py-2 text-xs bg-amber-900/30 text-amber-400 rounded-md hover:bg-amber-900/50 disabled:opacity-40 transition-colors"
+            title="Includes derived metrics: token estimates, confidence calibration, secondary failure patterns"
+          >
+            {exporting ? "Exporting..." : "Export Enriched CSV"}
           </button>
         </div>
       </div>
@@ -167,22 +218,40 @@ export default function DatasetExplorer() {
                           )}
                         </td>
                       </tr>
-                      {expandedRow === i && (
-                        <tr key={`expanded-${i}`} className="bg-gray-800/20">
-                          <td colSpan={6} className="px-4 py-3">
-                            <div className="space-y-2 text-xs">
-                              <div>
-                                <span className="text-gray-400 font-medium">Full prompt: </span>
-                                <span className="text-gray-300">{r.prompt_text}</span>
+                      {expandedRow === i && (() => {
+                        const tokens = estimateTokens(r.response_text);
+                        const conf = estimateConfidence(r.response_text);
+                        const calErr = calibrationError(r.response_text, r.truth_score);
+                        const patterns = detectFailurePatterns(r.response_text, r.failure_type);
+                        return (
+                          <tr key={`expanded-${i}`} className="bg-gray-800/20">
+                            <td colSpan={6} className="px-4 py-3">
+                              <div className="space-y-2 text-xs">
+                                <div>
+                                  <span className="text-gray-400 font-medium">Full prompt: </span>
+                                  <span className="text-gray-300">{r.prompt_text}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400 font-medium">Response: </span>
+                                  <span className="text-gray-300">{truncate(r.response_text, 500)}</span>
+                                </div>
+                                <div className="flex gap-4 pt-1 border-t border-gray-800/50">
+                                  <span className="text-gray-500">~{tokens} tokens</span>
+                                  <span className="text-gray-500">Confidence: <span className="text-orange-400">{(conf.confidence * 100).toFixed(0)}%</span></span>
+                                  {calErr != null && <span className="text-gray-500">Cal. error: <span className="text-orange-400">{(calErr * 100).toFixed(0)}%</span></span>}
+                                  {patterns.length > 0 && (
+                                    <span className="text-gray-500">
+                                      Secondary: {patterns.map((p) => (
+                                        <span key={p.pattern} className="text-purple-400 ml-1">{p.pattern.replace(/_/g, " ")}</span>
+                                      ))}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <span className="text-gray-400 font-medium">Response: </span>
-                                <span className="text-gray-300">{truncate(r.response_text, 500)}</span>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
+                            </td>
+                          </tr>
+                        );
+                      })()}
                     </Fragment>
                   ))}
                 </tbody>
