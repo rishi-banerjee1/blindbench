@@ -43,6 +43,8 @@ export default function Layout() {
       <footer className="border-t border-gray-800 py-6 text-center text-sm text-gray-500">
         BlindBench — Evaluating LLM trustworthiness through blind
         comparison
+        <span className="mx-2">·</span>
+        <a href="https://rishi-banerjee1.github.io/about-me/" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-300 transition-colors">Rishi Banerjee</a>
       </footer>
     </div>
   );
