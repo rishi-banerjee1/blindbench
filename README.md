@@ -310,4 +310,4 @@ PRs welcome. Key extension points:
 
 ## License
 
-MIT
+MIT — built by [Rishi Banerjee](https://rishi-banerjee1.github.io/about-me/)
