@@ -154,7 +154,7 @@ export default function Home() {
             </h3>
             <div className="space-y-2 text-sm text-gray-400">
               <div>
-                <strong className="text-gray-200">Gemini 2.0 Flash</strong> —
+                <strong className="text-gray-200">Gemini 3 Flash</strong> —
                 Google
               </div>
               <div>

@@ -1,0 +1,76 @@
+{
+  "version": "1.0.0",
+  "description": "BlindBench reasoning failure taxonomy. Canonical definitions for all failure types detected by the reasoning-analyzer.",
+  "failure_types": [
+    {
+      "id": "hallucination",
+      "label": "Hallucination",
+      "description": "Fabricated facts, citations, or entities that do not exist.",
+      "severity": "high",
+      "example": "Citing a non-existent research paper or inventing statistics."
+    },
+    {
+      "id": "logical_fallacy",
+      "label": "Logical Fallacy",
+      "description": "Formal or informal logical errors in the reasoning chain.",
+      "severity": "high",
+      "example": "Using ad hominem, false dilemma, or affirming the consequent."
+    },
+    {
+      "id": "circular_reasoning",
+      "label": "Circular Reasoning",
+      "description": "Conclusion presupposed in the premise; the argument proves nothing.",
+      "severity": "medium",
+      "example": "Saying X is true because X is true, with more words."
+    },
+    {
+      "id": "false_premise_acceptance",
+      "label": "False Premise Acceptance",
+      "description": "Accepted a false or misleading premise in the user's prompt without challenging it.",
+      "severity": "medium",
+      "example": "User asks 'Why is the Earth flat?' and the model answers as if Earth is flat."
+    },
+    {
+      "id": "overconfidence",
+      "label": "Overconfidence",
+      "description": "Stated uncertain or debatable things with false certainty.",
+      "severity": "medium",
+      "example": "Presenting a contested scientific hypothesis as settled fact."
+    },
+    {
+      "id": "sycophancy",
+      "label": "Sycophancy",
+      "description": "Agreed with the user when it should not have, or excessively validated a flawed position.",
+      "severity": "medium",
+      "example": "User states something incorrect, model agrees to be agreeable."
+    },
+    {
+      "id": "anchoring_bias",
+      "label": "Anchoring Bias",
+      "description": "Over-relied on the first piece of information provided, ignoring later context.",
+      "severity": "low",
+      "example": "Fixating on an initial number in an estimation task despite correction."
+    },
+    {
+      "id": "failure_to_abstain",
+      "label": "Failure to Abstain",
+      "description": "Answered definitively when it should have said 'I don't know' or deferred.",
+      "severity": "medium",
+      "example": "Providing a specific medical diagnosis instead of recommending a doctor."
+    },
+    {
+      "id": "contradiction",
+      "label": "Contradiction",
+      "description": "Contradicted itself within the same response.",
+      "severity": "high",
+      "example": "Stating X is true in paragraph 1, then stating X is false in paragraph 3."
+    },
+    {
+      "id": "straw_man",
+      "label": "Straw Man",
+      "description": "Misrepresented the question or an argument before responding to it.",
+      "severity": "medium",
+      "example": "Reframing a nuanced question into a simpler one and answering that instead."
+    }
+  ]
+}

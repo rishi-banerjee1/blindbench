@@ -4,7 +4,10 @@ const navItems = [
   { to: "/", label: "Home" },
   { to: "/arena", label: "Arena" },
   { to: "/leaderboard", label: "Leaderboard" },
-  { to: "/failures", label: "Failure Explorer" },
+  { to: "/failures", label: "Failures" },
+  { to: "/insights", label: "Insights" },
+  { to: "/analytics", label: "Analytics" },
+  { to: "/dataset", label: "Dataset" },
 ];
 
 export default function Layout() {

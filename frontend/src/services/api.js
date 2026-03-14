@@ -131,3 +131,90 @@ export async function fetchRecentPrompts(limit = 20) {
 
   return data;
 }
+
+// ─── Research Tools ─────────────────────────────────────────
+
+/**
+ * Trigger stability testing for a prompt's responses.
+ * Runs each model 3 times and computes response variance.
+ */
+export async function runStabilityTest(promptId) {
+  const { data, error } = await supabase.functions.invoke("stability-tester", {
+    body: { prompt_id: promptId },
+  });
+  if (error) throw new Error(error.message || "Stability test failed.");
+  return data;
+}
+
+/**
+ * Trigger prompt perturbation testing.
+ * Generates semantic variants and tests model sensitivity.
+ */
+export async function runPerturbationTest(promptId) {
+  const { data, error } = await supabase.functions.invoke("prompt-perturber", {
+    body: { prompt_id: promptId },
+  });
+  if (error) throw new Error(error.message || "Perturbation test failed.");
+  return data;
+}
+
+/**
+ * Export dataset as JSON or CSV.
+ * Uses a direct fetch since supabase.functions.invoke doesn't support GET.
+ */
+export async function exportDataset(format = "json", filters = {}) {
+  const params = new URLSearchParams({ format });
+  if (filters.model) params.set("model", filters.model);
+  if (filters.failure_type) params.set("failure_type", filters.failure_type);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.offset) params.set("offset", String(filters.offset));
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/dataset-export?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "Export failed" }));
+    throw new Error(err.error || "Dataset export failed.");
+  }
+
+  if (format === "csv") {
+    return response.text();
+  }
+  return response.json();
+}
+
+/**
+ * Fetch model performance summary for analytics.
+ */
+export async function fetchModelPerformance() {
+  const { data, error } = await supabase
+    .from("model_performance_summary")
+    .select("*")
+    .order("avg_truth_score", { ascending: false, nullsFirst: false });
+
+  if (error) throw new Error(error.message || "Failed to fetch performance data.");
+  return data;
+}
+
+/**
+ * Fetch evaluation records for the dataset explorer.
+ */
+export async function fetchEvaluationRecords(limit = 50, offset = 0) {
+  const { data, error } = await supabase
+    .from("evaluation_records")
+    .select("*")
+    .range(offset, offset + limit - 1);
+
+  if (error) throw new Error(error.message || "Failed to fetch evaluation records.");
+  return data;
+}
