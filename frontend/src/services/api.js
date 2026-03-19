@@ -57,17 +57,18 @@ export async function analyzeReasoning(promptId) {
 
 /**
  * Submit a vote for the winning model.
+ * Routed through edge function for server-side rate limiting and IP hashing.
  */
 export async function submitVote(promptId, winnerModel) {
-  const { error } = await supabase.from("votes").insert({
-    prompt_id: promptId,
-    winner_model: winnerModel,
-    ip_hash: "client", // Server-side edge function should hash this
+  const { data, error } = await supabase.functions.invoke("submit-vote", {
+    body: { prompt_id: promptId, winner_model: winnerModel },
   });
 
   if (error) {
     throw new Error(error.message || "Failed to submit vote.");
   }
+
+  return data;
 }
 
 /**

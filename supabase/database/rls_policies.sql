@@ -9,12 +9,12 @@
 -- ========== PROMPTS ==========
 ALTER TABLE prompts ENABLE ROW LEVEL SECURITY;
 
--- Anon users can submit prompts (insert only)
-CREATE POLICY "anon_insert_prompts"
+-- Anon cannot insert prompts (only edge functions via service_role)
+CREATE POLICY "deny_anon_insert_prompts"
     ON prompts
     FOR INSERT
     TO anon
-    WITH CHECK (true);
+    WITH CHECK (false);
 
 -- Anon users can read prompts (for displaying in arena)
 CREATE POLICY "anon_select_prompts"
@@ -73,12 +73,12 @@ CREATE POLICY "deny_anon_delete_responses"
 -- ========== VOTES ==========
 ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
 
--- Anon can submit votes
-CREATE POLICY "anon_insert_votes"
+-- Anon cannot insert votes (only edge functions via service_role)
+CREATE POLICY "deny_anon_insert_votes"
     ON votes
     FOR INSERT
     TO anon
-    WITH CHECK (true);
+    WITH CHECK (false);
 
 -- Anon can read votes (for leaderboard/stats)
 CREATE POLICY "anon_select_votes"
