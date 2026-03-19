@@ -94,12 +94,12 @@ ORDER BY total_wins DESC;
 CREATE UNIQUE INDEX idx_leaderboard_model ON leaderboard (model);
 
 -- Function to refresh the leaderboard materialized view
-CREATE OR REPLACE FUNCTION refresh_leaderboard()
+CREATE OR REPLACE FUNCTION public.refresh_leaderboard()
 RETURNS void AS $$
 BEGIN
-    REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY public.leaderboard;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- ------------------------------------------------------------
 -- Materialized view: failure_summary
@@ -119,9 +119,9 @@ ORDER BY model, occurrence_count DESC;
 CREATE UNIQUE INDEX idx_failure_summary_model_type ON failure_summary (model, failure_type);
 
 -- Function to refresh failure summary
-CREATE OR REPLACE FUNCTION refresh_failure_summary()
+CREATE OR REPLACE FUNCTION public.refresh_failure_summary()
 RETURNS void AS $$
 BEGIN
-    REFRESH MATERIALIZED VIEW CONCURRENTLY failure_summary;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY public.failure_summary;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
