@@ -50,7 +50,16 @@ export function validatePrompt(input: unknown): ValidationResult {
 
 /**
  * Remove all HTML tags from a string.
+ * Loops until stable to prevent bypass via nested fragments
+ * (e.g., "<scr<script>ipt>" → "<script>" after one pass).
  */
 function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, "");
+  const TAG_RE = /<[^>]*>/g;
+  let result = str;
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(TAG_RE, "");
+  } while (result !== prev);
+  return result;
 }
