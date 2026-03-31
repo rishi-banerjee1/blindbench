@@ -6,6 +6,8 @@ on:
     - cron: '17 3 */4 * *'
   workflow_dispatch: # Manual trigger if needed
 
+permissions: {}
+
 jobs:
   ping:
     runs-on: ubuntu-latest
