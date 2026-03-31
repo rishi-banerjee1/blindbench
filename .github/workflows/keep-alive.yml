@@ -1,0 +1,25 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Every 4 days at 3:17 AM UTC (well within the 7-day pause window)
+    - cron: '17 3 */4 * *'
+  workflow_dispatch: # Manual trigger if needed
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase (real DB query)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://ynpbloxuiqooslidkguu.supabase.co/functions/v1/dataset-export?format=json&limit=1")
+          echo "Supabase responded with HTTP $STATUS"
+          if [ "$STATUS" -eq "000" ]; then
+            echo "::error::Supabase is unreachable — project may be paused"
+            exit 1
+          elif [ "$STATUS" -ge 500 ]; then
+            echo "::warning::Supabase returned $STATUS — DB may still be starting"
+          else
+            echo "Supabase is alive (HTTP $STATUS)"
+          fi
