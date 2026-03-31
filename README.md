@@ -271,6 +271,10 @@ cd frontend
 npm run deploy
 ```
 
+### Keep-Alive (Supabase Free Tier)
+
+A GitHub Actions workflow (`.github/workflows/keep-alive.yml`) pings the database every 4 days to prevent Supabase free-tier auto-pause. No configuration needed — it runs automatically on the public `dataset-export` endpoint.
+
 ---
 
 ## Environment Variables
