@@ -2,26 +2,88 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Every 4 days at 3:17 AM UTC (well within the 7-day pause window)
-    - cron: '17 3 */4 * *'
-  workflow_dispatch: # Manual trigger if needed
+    # Daily at 03:17 UTC. Previously every 4 days, but HTTP-only pings can
+    # silently no-op (edge function cached, auth failure, etc.) — daily gives
+    # us 7 chances per pause-window to catch a real failure before Supabase
+    # pauses the project.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
 
-permissions: {}
+permissions:
+  issues: write  # needed to open an alert issue on failure
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase (real DB query)
+      - name: Ping Postgres via PostgREST
+        id: ping
+        env:
+          SUPABASE_URL: https://ynpbloxuiqooslidkguu.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://ynpbloxuiqooslidkguu.supabase.co/functions/v1/dataset-export?format=json&limit=1")
-          echo "Supabase responded with HTTP $STATUS"
-          if [ "$STATUS" -eq "000" ]; then
-            echo "::error::Supabase is unreachable — project may be paused"
+          set -euo pipefail
+
+          # Hit PostgREST directly — this ALWAYS executes a Postgres query,
+          # unlike edge functions which can short-circuit. Selecting `id`
+          # from `prompts` (anon SELECT policy is open per migration
+          # 20260314000000_initial_schema.sql).
+          RESPONSE_FILE=$(mktemp)
+          trap 'rm -f "$RESPONSE_FILE"' EXIT
+
+          STATUS=$(curl -sS -o "$RESPONSE_FILE" -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/prompts?select=id&limit=1")
+
+          BODY=$(cat "$RESPONSE_FILE")
+          echo "HTTP status: $STATUS"
+          echo "Body (first 200 chars): ${BODY:0:200}"
+
+          # Verify the ping actually hit Postgres. PostgREST returns a JSON
+          # array on success and a JSON object ({"code":...,"message":...})
+          # on error — so checking for a leading `[` separates "Postgres
+          # executed a query" from "PostgREST rejected the request."
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Expected HTTP 200, got $STATUS. Body: $BODY"
             exit 1
-          elif [ "$STATUS" -ge 500 ]; then
-            echo "::warning::Supabase returned $STATUS — DB may still be starting"
+          fi
+          if [[ "$BODY" != \[* ]]; then
+            echo "::error::Response is not a JSON array — PostgREST likely errored without hitting Postgres. Body: $BODY"
+            exit 1
+          fi
+
+          echo "Supabase is alive"
+
+      - name: Open issue on failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Keep-alive ping failed on $(date -u +%Y-%m-%d)"
+          BODY=$(cat <<EOF
+          The scheduled Supabase keep-alive ping failed.
+
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Trigger: ${{ github.event_name }}
+          - Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          **Likely causes:** Supabase project paused, anon key rotated, \`prompts\`
+          table removed, or PostgREST misconfigured. Resume the project in the
+          Supabase dashboard and re-run this workflow via \`workflow_dispatch\`
+          to confirm recovery.
+          EOF
+          )
+
+          # Reuse an existing open issue if one already exists (avoid spam
+          # if keep-alive fails multiple days in a row).
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --label keep-alive --limit 1 --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "$BODY"
           else
-            echo "Supabase is alive (HTTP $STATUS)"
+            gh label create keep-alive --color d93f0b --description "Supabase keep-alive alerts" --repo "${{ github.repository }}" 2>/dev/null || true
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "$BODY" --label keep-alive
           fi
